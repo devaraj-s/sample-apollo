@@ -1,0 +1,19 @@
+{
+  "name": "sample-nodejs",
+  "version": "1.0.0",
+  "description": "Sample node app for deployment testing",
+  "main": "app.js",
+  "repository": {
+    "url": "https://github.com/devaraj-s/sample-nodejs.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "devarajsuk@gmail.com",
+  "license": "ISC",
+  "dependencies": {
+    "@sentry/node": "^6.13.3",
+    "@sentry/tracing": "^6.13.3",
+    "express": "^4.17.1"
+  }
+}
