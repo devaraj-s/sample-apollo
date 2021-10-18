@@ -1,4 +1,4 @@
-# Sample Node js 
+# Sample apollo js 
 [![APP CI](https://github.com/devaraj-s/sample-nodejs/actions/workflows/aws.yml/badge.svg)](https://github.com/devaraj-s/sample-nodejs/actions/workflows/aws.yml)
 
 ---

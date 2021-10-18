@@ -1,0 +1,144 @@
+name: APP CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: eu-west-1                   # set this to your preferred AWS region, e.g.eu-west-1
+
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    outputs:
+      my_image_tag: ${{ steps.bump.outputs.my_image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      
+      - name: "Lint code"
+        run: echo "Linting repository"
+
+      - name: "Run unit tests"
+        run: echo "Running unit tests"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        
+      - name: Get the latest tag
+        id: latest-tag
+        run: echo "::set-output name=latest_tag::$(git tag --sort=-v:refname | head -n 1)"
+        shell: bash
+
+      - name: Bump the version for release
+        id: bump
+        run: echo "::set-output name=my_image_tag::$(sh ${GITHUB_WORKSPACE}/.github/workflows/scripts/bump.sh)"
+        shell: bash
+
+      - name: Build Changelog
+        id: github_release
+        uses: mikepenz/release-changelog-builder-action@v2.4.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        with:
+          tag_name: v${{ steps.bump.outputs.my_image_tag }}
+          release_name: Release-v${{ steps.bump.outputs.my_image_tag }}
+          body: ${{steps.github_release.outputs.changelog}}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Build, tag, and push image to Amazon ECR
+        id: buildImage
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.bump.outputs.my_image_tag }}
+        run: |
+          # Build a docker container and
+          # push it to ECR so that it can
+          # be deployed to ECS.
+          docker build -t $ECR_REGISTRY/${{ github.event.repository.name }}:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/${{ github.event.repository.name }}:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/${{ github.event.repository.name }}:$IMAGE_TAG"
+
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Set Task to set Image
+        id: set_image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ needs.build.outputs.my_image_tag }}
+        run: |
+          echo "::set-output name=image::$ECR_REGISTRY/${{ github.event.repository.name }}:$IMAGE_TAG"
+
+      - name: Render Amazon ECS task definition
+        id: render-web-container
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ needs.build.outputs.my_image_tag }}
+        with:
+          task-definition: task-definition.json # output file (required)
+          container-name: ${{ github.event.repository.name }} # container name (required)
+          image: ${{ steps.set_image.outputs.image }} # image to insert (required)
+          # aws-sm-name: MySecretName # aws secrets manager name (optional)
+     
+      - name: Download task definition
+        run: |
+          aws ecs describe-task-definition --task-definition "main-${{ github.event.repository.name }}" --query taskDefinition > task-definition.json
+
+      - name: Deploy to Amazon ECS service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.render-web-container.outputs.task-definition }}
+          service: "main-${{ github.event.repository.name }}-service"
+          cluster: "main-ecs-cluster"
+          wait-for-service-stability: true
+          
+      
