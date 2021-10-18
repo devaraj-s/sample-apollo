@@ -3,7 +3,7 @@ const app = express()
 const port = 3001
 
 app.get('/', (req, res) => {
-  res.send('Hello GitOps World with Faragate ECS Sentry Demo:) !!!')
+  res.send('Hello GitOps World with Faragate ECS apollo :) !!!')
 })
 
 //process.on('SIGTERM', () => {
