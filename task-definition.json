@@ -3,9 +3,9 @@
     {
       "portMappings": [
         {
-          "hostPort": 0,
+          "hostPort": 3001,
           "protocol": "tcp",
-          "containerPort": 3000
+          "containerPort": 3001
         }
       ],
       "logConfiguration": {
