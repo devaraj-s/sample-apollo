@@ -1,0 +1,40 @@
+{
+  "containerDefinitions": [
+    {
+      "portMappings": [
+        {
+          "hostPort": 3000,
+          "protocol": "tcp",
+          "containerPort": 3000
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/main-task",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-region": "eu-west-1"
+        }
+      },
+      "command": [
+        "node",
+        "app.js"
+      ],
+      "cpu": 256,
+      "workingDirectory": "/usr/src/app",
+      "memory": 256,
+      "image": "147192318822.dkr.ecr.eu-west-1.amazonaws.com/sample-apollo:0.0.24",
+      "essential": true,
+      "name": "sample-apollo"
+    }
+  ],
+  "executionRoleArn": "main-ecsTaskExecutionRole",
+  "family": "main-apollo-nodejs",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "256",
+  "memory": "512",
+  "networkMode": "awsvpc"
+
+}
